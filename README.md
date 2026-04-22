@@ -1,206 +1,75 @@
-# Actor-Critic-RL
+# Actor-Critic Reinforcement Learning
 
+Implementation of Actor-Critic methods including A3C (Asynchronous Advantage Actor-Critic) across multiple Gymnasium environments.
 
-This project implements and explores Actor-Critic reinforcement learning methods, including both architectural design and full Advantage Actor-Critic (A2C/A3C) training. The goal is to build a generalizable RL framework that works across multiple Gymnasium environments with different observation and action spaces.
+## Overview
 
----
+This project was completed as part of CSE 546: Reinforcement Learning at the University at Buffalo (Spring 2026). It covers:
 
-# Part I: Actor-Critic Foundations
-
-This section focuses on understanding and implementing core components of Actor-Critic methods and building reusable neural architectures.
-
----
-
-## 1. Actor-Critic Architectures
-
-Two different Actor-Critic designs are implemented:
-
-### (a) Separate Networks
-- Independent actor network
-- Independent critic network
-- No shared parameters
-
-**Why use this?**
-- More flexibility in learning separate representations
-- Useful when actor and critic require different feature extraction
+- **Part I:** Actor-Critic neural network architectures and training utilities
+- **Part II:** Full A3C implementation with multi-threaded training on CartPole-v1
+- **Part III:** A3C applied to LunarLander-v3 and Acrobot-v1
 
 ---
 
-### (b) Shared Network with Two Heads
-- Shared feature extractor
-- Two output heads:
-  - Actor head (policy output)
-  - Critic head (value estimation)
+## Part I: Actor-Critic Foundations
 
-**Why use this?**
-- More parameter efficient
-- Shared learning improves feature reuse
-- Typically more stable and faster to train
+### Architectures Implemented
+- **Separate networks** - independent actor and critic with no shared layers
+- **Shared network with two heads** - shared feature extractor with separate actor and critic output heads
+- **Shared network for continuous actions** - outputs mean and log_std for Gaussian policy
+- **CNN-based shared network** - for image-based environments like Atari
 
----
+### Auto-Network Builder
+`create_shared_network(env)` automatically builds the right architecture for any Gymnasium environment by inspecting the observation and action spaces.
 
-## 2. Generalized Actor-Critic Network Builder
+Tested on:
+- `CliffWalking-v0` - discrete observations
+- `LunarLander-v3` - vector observations, discrete actions
+- `PongNoFrameskip-v4` - image observations
+- `HalfCheetah-v5` - continuous actions
 
-A dynamic function `create_shared_network(env)` is implemented to automatically construct Actor-Critic models for any Gymnasium environment.
-
-### Supported observation types:
-- Discrete (converted to one-hot encoding)
-- Box (vector inputs)
-- Image-based inputs (with preprocessing support)
-
-### Supported action spaces:
-- Discrete actions
-- Continuous actions (Box)
-- Multi-discrete actions
+### Utilities
+- `normalize_observation(obs, env)` - normalizes Box observations to [-1, 1]
+- Gradient clipping using `torch.nn.utils.clip_grad_norm_`
 
 ---
 
-### Tested Environments
-- CliffWalking-v0  
-- LunarLander-v3  
-- PongNoFrameskip-v4 (with preprocessing wrappers)  
-- HalfCheetah-v5  
+## Part II: A3C on CartPole-v1
 
-The implementation is designed to generalize to unseen environments.
+### Implementation Details
+- 2 parallel worker threads using Python `threading`
+- Each thread maintains its own environment instance
+- Local model copy per episode using `copy.deepcopy`
+- Shared global model updated with `threading.Lock()` for safe synchronization
+- Entropy bonus to encourage exploration
+- Gradient clipping with `max_norm=0.5`
 
----
-
-## 3. Observation Normalization
-
-A normalization function is implemented:
-
-```python
-normalize_observation(obs, env)
-````
-
-### Behavior:
-
-* Applies only to Box observation spaces with defined bounds
-* Scales observations to range **[-1, 1]**
-* Uses:
-
-  * `env.observation_space.low`
-  * `env.observation_space.high`
-
-### Tested on:
-
-* LunarLander-v3
-* PongNoFrameskip-v4
+### Results
+- Training: rewards consistently in 150-300 range by end of training
+- Greedy evaluation (10 episodes): rewards between 159-191
+- Video of greedy episode saved
 
 ---
 
-## 4. Gradient Clipping
+## Part III: A3C on Complex Environments
 
-Gradient clipping is applied during training using PyTorch:
+### LunarLander-v3
+- Hidden dim: 256, lr: 3e-4, entropy: 0.01, 1500 episodes
+- Best eval rewards: -93 to -252, with one positive episode (+49)
 
-```python
-torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
-```
+### Acrobot-v1
+- Hidden dim: 256, lr: 3e-4, entropy: 0.05, 2000 episodes
+- Sparse reward environment - best eval achieved -146
+- Results varied across runs due to stochastic nature of A3C
 
-### Purpose:
 
-* Prevents exploding gradients
-* Stabilizes training in deep reinforcement learning
-* Improves convergence behavior
 
-Gradient norms are logged before and after clipping to verify effectiveness.
-
----
-
-# Part II: Advantage Actor-Critic (A2C/A3C)
-
-This section implements a full Advantage Actor-Critic algorithm and evaluates it on a Gymnasium environment.
-
----
-
-## Algorithm Overview
-
-The implementation supports:
-
-* A2C (synchronous updates)
-* A3C-style multi-threaded training (2+ worker threads)
-
-Each worker:
-
-* Interacts with its own environment instance
-* Computes gradients independently
-* Updates a shared global model
-
-This improves exploration diversity and stabilizes training.
-
----
-
-## Training Setup
-
-* Framework: PyTorch
-* Environment: Gymnasium-compatible tasks
-* Parallel workers: minimum 2 actor-learner threads
-* Policy: stochastic during training, greedy during evaluation
-
----
-
-## Evaluation Procedure
-
-The trained agent is evaluated using a greedy policy:
-
-* At least 10 episodes
-* No exploration (deterministic action selection)
-* Total reward per episode is recorded and plotted
-
----
-
-## Rendering
-
-A single greedy episode is rendered to verify learned behavior.
-
-Outputs include:
-
-* Step-by-step environment rendering
-* Saved visual evidence (screenshots or video)
-
----
-
-## Key Results
-
-* Stable learning achieved using shared global updates
-* Parallel workers improved exploration efficiency
-* Agent successfully learned task-specific policy behavior
-* Evaluation demonstrates consistent performance under greedy policy
-
----
-
-# Requirements
-
-* Python 3.10
-* Gymnasium
-* PyTorch
-* NumPy
-* Matplotlib
-
-Install dependencies:
+## Requirements
 
 ```bash
-pip install gymnasium torch numpy matplotlib
+pip install gymnasium torch numpy matplotlib pandas
+pip install "gymnasium[atari]" "autorom[accept-rom-license]"
+pip install "gymnasium[mujoco]"
 ```
-
----
-
-# References
-
-* Mnih, V. et al. (2016). *Asynchronous Methods for Deep Reinforcement Learning*. ICML. [https://arxiv.org/abs/1602.01783](https://arxiv.org/abs/1602.01783)
-* Sutton, R. S., & Barto, A. G. (2018). *Reinforcement Learning: An Introduction*
-* Gymnasium Documentation: [https://gymnasium.farama.org](https://gymnasium.farama.org)
-* PyTorch Documentation: [https://pytorch.org](https://pytorch.org)
-
----
-
-# Notes
-
-This project emphasizes:
-
-* Generalizable RL architecture design
-* Stability techniques (normalization + gradient clipping)
-* Multi-environment compatibility
-* Actor-Critic theory-to-practice implementation
-
 
